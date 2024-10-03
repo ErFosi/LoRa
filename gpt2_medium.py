@@ -8,6 +8,8 @@ from labml import lab, monit, tracker
 from labml.configs import BaseConfigs, option
 from labml_nn.lora.gpt2 import GPTModel  # Custom implementation for LoRA
 
+import matplotlib.pyplot as plt
+import time
 
 class Trainer(BaseConfigs):
     """
@@ -149,6 +151,120 @@ class Trainer(BaseConfigs):
                 tracker.add_global_step()
             #
             tracker.new_line()
+
+
+    def lora_finetuning(self, lora_r_values=[1, 2, 4, 8, 16]):
+        """
+        ### LoRa fine-tuning with varying rank values (r)
+        Trains the model with different values of LoRa rank and stores the results.
+        """
+        lora_results = []
+
+        for r in lora_r_values:
+            print(f"Training with LoRa rank: {r}")
+            self.model.r = r
+            self._load_pretrained_weights()  # Ensure pretrained weights are loaded
+
+            start_time = time.time()
+            epoch_loss = []
+
+            for _ in monit.loop(self.epochs):
+                epoch_loss_sum = 0
+                for (inputs,) in monit.iterate('Train', self.data_loader):
+                    inputs = inputs.to(self.device)
+                    logits = self.model(inputs[:, :-1])
+                    loss = self.loss_func(logits.reshape(-1, logits.shape[-1]), inputs[:, 1:].reshape(-1))
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+                    epoch_loss_sum += loss.item()
+                epoch_loss.append(epoch_loss_sum / len(self.data_loader))
+
+            total_time = time.time() - start_time
+            lora_results.append({'r': r, 'loss': epoch_loss, 'time': total_time})
+
+        return lora_results
+
+    def simple_finetuning(self):
+        """
+        ### Simple fine-tuning without LoRa
+        Fine-tunes the model and logs loss and time.
+        """
+        print("Starting simple fine-tuning...")
+        self.model.r = None  # Disable LoRa
+
+        start_time = time.time()
+        epoch_loss = []
+
+        for _ in monit.loop(self.epochs):
+            epoch_loss_sum = 0
+            for (inputs,) in monit.iterate('Train', self.data_loader):
+                inputs = inputs.to(self.device)
+                logits = self.model(inputs[:, :-1])
+                loss = self.loss_func(logits.reshape(-1, logits.shape[-1]), inputs[:, 1:].reshape(-1))
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                epoch_loss_sum += loss.item()
+            epoch_loss.append(epoch_loss_sum / len(self.data_loader))
+
+        total_time = time.time() - start_time
+        return {'loss': epoch_loss, 'time': total_time}
+
+    def plot_lora_improvement(self, lora_results):
+        """
+        ### Plot improvement in results when increasing LoRa rank (r)
+        """
+        r_values = [result['r'] for result in lora_results]
+        losses = [result['loss'][-1] for result in lora_results]
+
+        plt.figure(figsize=(8, 6))
+        plt.plot(r_values, losses, marker='o', linestyle='-', color='b')
+        plt.title('Loss Improvement with Increasing LoRa Rank (R)')
+        plt.xlabel('LoRa Rank (R)')
+        plt.ylabel('Final Loss')
+        plt.grid(True)
+        plt.show()
+
+    def plot_finetune_vs_lora(self, lora_results, simple_finetune_results):
+        """
+        ### Plot comparison of loss between fine-tuning and LoRa
+        """
+        epochs = range(1, len(lora_results[0]['loss']) + 1)
+
+        # Plot LoRa results for different ranks
+        plt.figure(figsize=(8, 6))
+        for result in lora_results:
+            plt.plot(epochs, result['loss'], label=f'LoRa R={result["r"]}', linestyle='--')
+
+        # Plot simple fine-tuning result
+        plt.plot(epochs, simple_finetune_results['loss'], label='Simple Fine-tuning', color='r', linewidth=2)
+
+        plt.title('Fine-Tuning vs LoRa Comparison')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def plot_time_comparison(self, lora_results, simple_finetune_results):
+        """
+        ### Plot time needed for LoRa for each R vs fine-tuning
+        """
+        r_values = [result['r'] for result in lora_results]
+        lora_times = [result['time'] for result in lora_results]
+        simple_time = simple_finetune_results['time']
+
+        plt.figure(figsize=(8, 6))
+        plt.plot(r_values, lora_times, marker='o', linestyle='-', color='g', label='LoRa Time')
+        plt.axhline(y=simple_time, color='r', linestyle='--', label='Simple Fine-tuning Time')
+
+        plt.title('Time Comparison: LoRa vs Simple Fine-Tuning')
+        plt.xlabel('LoRa Rank (R)')
+        plt.ylabel('Time (seconds)')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
 
 @option(Trainer.text)
