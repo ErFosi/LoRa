@@ -249,21 +249,28 @@ class Trainer(BaseConfigs):
 
     def plot_time_comparison(self, lora_results, simple_finetune_results):
         """
-        ### Plot time needed for LoRa for each R vs fine-tuning
+        ### Plot time comparison: LoRa (R) vs Simple Fine-Tuning
+        Displays a bar chart comparing the time taken for a specific LoRa rank and the simple fine-tuning.
         """
-        r_values = [result['r'] for result in lora_results]
-        lora_times = [result['time'] for result in lora_results]
+        # Example: selecting the second LoRa result (index 1)
+        lora_selected = lora_results[1]  # Second LoRa rank result
+        r_value = lora_selected['r']
+        lora_time = lora_selected['time']
         simple_time = simple_finetune_results['time']
 
+        # Plotting
         plt.figure(figsize=(8, 6))
-        plt.plot(r_values, lora_times, marker='o', linestyle='-', color='g', label='LoRa Time')
-        plt.axhline(y=simple_time, color='r', linestyle='--', label='Simple Fine-tuning Time')
 
-        plt.title('Time Comparison: LoRa vs Simple Fine-Tuning')
-        plt.xlabel('LoRa Rank (R)')
+        # Bar chart
+        labels = [f'LoRa R={r_value}', 'Simple Fine-Tuning']
+        times = [lora_time, simple_time]
+
+        plt.bar(labels, times, color=['green', 'red'])
+
+        plt.title(f'Time Comparison: LoRa (R={r_value}) vs Simple Fine-Tuning')
         plt.ylabel('Time (seconds)')
-        plt.legend()
-        plt.grid(True)
+        plt.grid(axis='y')
+
         plt.show()
 
 
